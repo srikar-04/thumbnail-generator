@@ -1,6 +1,6 @@
 # Source-photo capture guide for the Asset Pack
 
-Status: ready-for-agent (triaged via PRD.md — guide doubles as onboarding acceptance checklist; checklist items are data the onboard command evaluates)
+Status: wontfix (folded into 07-onboard-asset-pack — content absorbed there, not rejected; do not grab this ticket separately)
 
 ## Problem
 

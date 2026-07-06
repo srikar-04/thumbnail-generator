@@ -1,6 +1,10 @@
 # Critique stage ranks unreliably — usable as filter only
 
-Status: ready-for-agent (triaged via PRD.md — launch ships Critique as defect-filter only; ranking experiments are post-launch)
+Status: ready-for-agent (Milestone 1 ticket — see Parent / Acceptance / Blocked by below)
+
+## Parent
+
+`.scratch/pipeline/PRD.md` (Milestone 1). Stories 25–27. Launch scope: build Critique as a **defect filter with annotations** feeding an unranked Contact Sheet. The ranking-improvement ideas below (pairwise, ensembles, calibration) are post-launch — do not build them in this ticket.
 
 ## Problem
 
@@ -26,8 +30,30 @@ bottom half), never as the presentation order; the operator ranks by eye.**
 - Calibrate the rubric with few-shot examples from the Style Library annotations.
 - Ensemble: 2-3 cheap judge calls per candidate, median score.
 
-## Acceptance
+## Acceptance (original, superseded for Milestone 1)
 
 The Critique stage's top-3 matches the operator's eyeball top-3 on a 20-candidate
 order at least ~2 times out of 3, or the ranking role is formally dropped and
 Critique is redefined as defect-filter only (would need a CONTEXT.md glossary edit).
+
+> Milestone 1 takes the second branch by decision (PRD): filter-only ships now, the
+> top-3 experiment stays post-launch. The CONTEXT.md glossary edit for Critique
+> ("scores and ranks" → detects defects and filters) is in scope for this ticket.
+
+## Acceptance criteria (Milestone 1)
+
+At the CLI-over-disk seam with the fake critique VLM returning canned verdicts:
+
+- [ ] Candidates the fake judge marks with a clear defect (illegible text, low
+      contrast, missing face emotion, clutter) are dropped before the Contact Sheet;
+      the drop and its reason are recorded in the Order folder.
+- [ ] Surviving Candidates appear on the Contact Sheet annotated with any non-fatal
+      defects the judge flagged.
+- [ ] The Contact Sheet presents survivors grouped by style spec, in no score order,
+      and displays no numeric scores anywhere.
+- [ ] The Critique checklist is universal — no niche-specific items (ADR-0003).
+- [ ] CONTEXT.md's Critique glossary entry is updated to the defect-filter definition.
+
+## Blocked by
+
+- 09-candidate-composition
