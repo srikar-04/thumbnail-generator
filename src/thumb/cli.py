@@ -3,7 +3,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from thumb import assetpack, pipeline, providers, sheet, workspace
+from thumb import assetpack, library, pipeline, providers, sheet, workspace
 
 
 def cmd_onboard(args):
@@ -122,6 +122,31 @@ def cmd_order_list(args):
     return 0
 
 
+def cmd_style_add(args):
+    reference = Path(args.reference)
+    if not reference.exists():
+        print(f"reference image not found: {reference}", file=sys.stderr)
+        return 1
+    if args.creator and _require_creator(args) is None:
+        return 1
+    bound = providers.get_providers(args.root)
+    spec_path = library.add_spec(
+        args.root, args.niche, reference, bound.critique, creator=args.creator
+    )
+    print(f"style spec: {spec_path}")
+    return 0
+
+
+def cmd_style_list(args):
+    specs = library.list_specs(args.root, args.niche, creator=args.creator)
+    if not specs:
+        print(f"no style specs for niche {args.niche!r}")
+        return 0
+    for spec in specs:
+        print(f"{spec['name']}  [{spec['text_device']}]  accent {spec['accent']}")
+    return 0
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="thumb")
     parser.add_argument("--root", default=".", help="workspace root (default: cwd)")
@@ -138,6 +163,22 @@ def main(argv=None):
         help="directory of thumbnails the Creator admires (style sources, not face photos)",
     )
     onboard.set_defaults(func=cmd_onboard)
+
+    style = sub.add_parser("style", help="Style Library: niche-keyed reference styles")
+    style_sub = style.add_subparsers(dest="style_command", required=True)
+
+    style_add = style_sub.add_parser("add", help="extract a style spec from a reference image")
+    style_add.add_argument("reference", help="path to the reference thumbnail image")
+    style_add.add_argument("--niche", required=True)
+    style_add.add_argument(
+        "--creator", help="scope the spec to this Creator's Asset Pack instead of the niche track"
+    )
+    style_add.set_defaults(func=cmd_style_add)
+
+    style_list = style_sub.add_parser("list", help="list style specs available for a niche")
+    style_list.add_argument("--niche", required=True)
+    style_list.add_argument("--creator", help="also include this Creator's scoped specs")
+    style_list.set_defaults(func=cmd_style_list)
 
     order = sub.add_parser("order", help="Order lifecycle: Brief in, Contact Sheet out")
     order_sub = order.add_subparsers(dest="order_command", required=True)

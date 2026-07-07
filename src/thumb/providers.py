@@ -55,6 +55,8 @@ class CritiqueProvider(Protocol):
 
     def analyze_photo(self, photo_path) -> dict: ...
 
+    def extract_style_spec(self, reference_path) -> dict: ...
+
 
 class FakeWordingProvider:
     SUFFIXES = ["", "EXPOSED", "SECRETS", "NOW", "THE TRUTH"]
@@ -88,7 +90,18 @@ class FakeCritiqueProvider:
     filename tokens so tests control analysis through inputs alone:
     point-left/point-right, gaze-left/gaze-right, shock/grimace/joy/curious,
     flat (light), busy (background), filtered, shirt-text.
+
+    `extract_style_spec` tokens: grunge-wall/paper/black (backdrop),
+    chips/label-bars (text device; default plain-accent),
+    red/yellow/teal (accent color).
     """
+
+    BACKDROPS = {
+        "grunge-wall": "red-orange grunge wall texture, one flat color field",
+        "paper": "warm paper texture with soft grain",
+        "black": "near-black textured backdrop with subtle grain",
+    }
+    ACCENTS = {"red": "#D82C2C", "yellow": "#F2C200", "teal": "#12B5A5"}
 
     EXPRESSIONS = ("shock", "grimace", "joy", "curious")
 
@@ -117,6 +130,30 @@ class FakeCritiqueProvider:
             "lighting": "flat" if "flat" in stem else "directional",
             "background": "busy" if "busy" in stem else "plain",
             "filtered": "filtered" in stem,
+        }
+
+    def extract_style_spec(self, reference_path):
+        stem = Path(reference_path).stem.lower()
+        self._log.record("critique", "extract_style_spec", Path(reference_path).name)
+
+        backdrop = next(
+            (text for token, text in self.BACKDROPS.items() if token in stem),
+            "textured color-field backdrop, one flat color",
+        )
+        device = next(
+            (d for d in ("chips", "label-bars") if d in stem), "plain-accent"
+        )
+        accent = next(
+            (hex_ for token, hex_ in self.ACCENTS.items() if token in stem), "#D82C2C"
+        )
+        return {
+            "backdrop": backdrop,
+            "palette": ["#202020", "#F5EFE6", accent],
+            "accent": accent,
+            "text_device": device,
+            "icon_usage": "one simple bold icon supporting the concept",
+            "subject_treatment": "studio-lit cutout, palette-tinted toward the backdrop",
+            "composition": "2-line text left with one accent word, subject right, generous negative space",
         }
 
 

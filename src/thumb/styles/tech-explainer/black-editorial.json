@@ -1,0 +1,11 @@
+{
+  "name": "black-editorial",
+  "niche": "tech-explainer",
+  "backdrop": "near-black textured backdrop with subtle grain, faint vignette, no scene elements",
+  "palette": ["#0B0B0D", "#FFFFFF"],
+  "accent": "#D82C2C",
+  "text_device": "plain-accent",
+  "icon_usage": "none, or at most one thin line-art glyph tucked behind the text",
+  "subject_treatment": "warm directional key light, studio look, subject fills right third chest-up",
+  "composition": "heavy white 2-line text left with one accent word in red, generous negative space, single focal axis"
+}

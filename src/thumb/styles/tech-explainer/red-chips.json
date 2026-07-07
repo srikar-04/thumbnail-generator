@@ -1,0 +1,11 @@
+{
+  "name": "red-chips",
+  "niche": "tech-explainer",
+  "backdrop": "red-orange grunge wall texture, gently darkened corners, one flat color field",
+  "palette": ["#A83226", "#F5EFE6", "#111111"],
+  "accent": "#D82C2C",
+  "text_device": "chips",
+  "icon_usage": "one simple bold icon supporting the concept, kept clear of text and subject",
+  "subject_treatment": "studio-lit cutout, palette-tinted toward the wall, feathered edge",
+  "composition": "black text on torn-paper white chips stacked 2 lines left, accent word in red, subject right"
+}

@@ -16,7 +16,7 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-thumb = ["*.md"]
+thumb = ["*.md", "styles/*/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
