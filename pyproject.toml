@@ -1,0 +1,19 @@
+[project]
+name = "thumb"
+version = "0.1.0"
+description = "Done-for-you YouTube thumbnail pipeline: CLI over plain files (ADR-0004)"
+requires-python = ">=3.12"
+dependencies = ["pillow"]
+
+[project.scripts]
+thumb = "thumb.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

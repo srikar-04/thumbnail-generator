@@ -1,3 +1,12 @@
 .env
 assets/
 scratch/
+
+# python
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+
+# live client data (Creator folders: photos, orders) — never commit
+creators/

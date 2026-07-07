@@ -1,6 +1,6 @@
 # Walking skeleton: `thumb` CLI end-to-end on fake providers
 
-Status: ready-for-agent
+Status: ready-for-human (implemented via TDD 2026-07-07; awaiting operator review)
 
 ## Parent
 
@@ -20,14 +20,26 @@ Also establish here, because every later ticket depends on them:
 
 All at the CLI-over-disk seam, fake providers, temp working directory, no network and no API key:
 
-- [ ] `thumb onboard` creates a Creator folder with recorded niche, brand colors, and face-on/faceless flag; onboarding a faceless Creator fails with a "not yet supported" message and creates no half-written folder.
-- [ ] `thumb order new` on an onboarded Creator creates an Order folder containing the Brief and `Status: new`.
-- [ ] `thumb order run` produces N candidate images at 1280×720, each with a metadata file alongside recording at minimum: wording, source photo, placement values, layout boxes. Order moves to `Status: generated`.
-- [ ] `thumb order sheet` writes a self-contained static HTML Contact Sheet referencing every candidate, openable from disk with no server.
-- [ ] `thumb order list` shows the Order and its current `Status:`.
-- [ ] Running the same Order twice with fake providers yields identical outputs (determinism).
-- [ ] The seam test harness exists and all of the above is covered by tests that assert only files, metadata content, and HTML content — no internals.
+- [x] `thumb onboard` creates a Creator folder with recorded niche, brand colors, and face-on/faceless flag; onboarding a faceless Creator fails with a "not yet supported" message and creates no half-written folder.
+- [x] `thumb order new` on an onboarded Creator creates an Order folder containing the Brief and `Status: new`.
+- [x] `thumb order run` produces N candidate images at 1280×720, each with a metadata file alongside recording at minimum: wording, source photo, placement values, layout boxes. Order moves to `Status: generated`.
+- [x] `thumb order sheet` writes a self-contained static HTML Contact Sheet referencing every candidate, openable from disk with no server.
+- [x] `thumb order list` shows the Order and its current `Status:`.
+- [x] Running the same Order twice with fake providers yields identical outputs (determinism).
+- [x] The seam test harness exists and all of the above is covered by tests that assert only files, metadata content, and HTML content — no internals.
 
 ## Blocked by
 
 None — can start immediately.
+
+## Comments
+
+- 2026-07-07: Implemented red→green in 7 cycles. Package `thumb` (src layout,
+  Python 3.14 venv at repo root), modules: cli / workspace / providers / pipeline /
+  sheet. 9 seam tests in `tests/` (subprocess CLI → temp dir → disk assertions only;
+  harness in `tests/conftest.py` strips GEMINI_API_KEY to enforce keyless fake mode).
+  Provider binding via `THUMB_PROVIDERS` env (default `fake`). Notes for reviewers:
+  `FakeCritiqueProvider` is defined-but-unused until ticket 01 wires Critique into
+  the run; compositing is intentionally naive placeholder (ticket 09); the
+  determinism test was proven able to fail via a temporary injected timestamp.
+  Unblocks tickets 07 and 08.
