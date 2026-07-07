@@ -3,7 +3,7 @@ import shutil
 import sys
 from pathlib import Path
 
-from thumb import pipeline, providers, sheet, workspace
+from thumb import assetpack, pipeline, providers, sheet, workspace
 
 
 def cmd_onboard(args):
@@ -33,6 +33,18 @@ def cmd_onboard(args):
         for src in sorted(Path(args.photos).iterdir()):
             if src.suffix.lower() in {".png", ".jpg", ".jpeg"}:
                 shutil.copy2(src, photo_dir / src.name)
+        bound = providers.get_providers(args.root)
+        analyzed = assetpack.analyze_photos(
+            args.root, args.creator, bound.critique, bound.cutout
+        )
+        if analyzed:
+            print(f"analyzed {len(analyzed)} photo(s)")
+    if args.references:
+        ref_dir = cdir / "asset-pack" / "references"
+        ref_dir.mkdir(parents=True, exist_ok=True)
+        for src in sorted(Path(args.references).iterdir()):
+            if src.suffix.lower() in {".png", ".jpg", ".jpeg"}:
+                shutil.copy2(src, ref_dir / src.name)
     print(f"onboarded {args.creator}")
     return 0
 
@@ -75,7 +87,7 @@ def cmd_order_run(args):
         print(f"unknown order: {args.creator}/{args.order}", file=sys.stderr)
         return 1
     n = pipeline.run_order(
-        args.root, args.creator, args.order, providers.get_providers(), n=args.n
+        args.root, args.creator, args.order, providers.get_providers(args.root), n=args.n
     )
     print(f"generated {n} candidates for {args.creator}/{args.order}")
     return 0
@@ -121,6 +133,10 @@ def main(argv=None):
     onboard.add_argument("--face", required=True, choices=["on", "faceless"])
     onboard.add_argument("--brand-color", required=True)
     onboard.add_argument("--photos", help="directory of face photos to copy into the Asset Pack")
+    onboard.add_argument(
+        "--references",
+        help="directory of thumbnails the Creator admires (style sources, not face photos)",
+    )
     onboard.set_defaults(func=cmd_onboard)
 
     order = sub.add_parser("order", help="Order lifecycle: Brief in, Contact Sheet out")

@@ -1,6 +1,6 @@
 # Onboarding: real Asset Pack intake with capture checklist, photo metadata, cutouts
 
-Status: ready-for-agent
+Status: ready-for-human (implemented via TDD 2026-07-07; awaiting operator review)
 
 ## Parent
 
@@ -20,14 +20,30 @@ Grow `thumb onboard` from the skeleton's folder-maker into real Asset Pack intak
 
 At the CLI-over-disk seam with fake VLM provider and fixture photos:
 
-- [ ] `thumb onboard` with a photo set writes, per accepted photo: a cached metadata record (gesture, gaze, expression, clothing text, crops) and a cutout file with transparency.
-- [ ] Photos failing checklist items are flagged in an onboarding report on disk; a photo set with zero expression variety (all neutral) produces a failure the operator can read.
-- [ ] Checklist items are data, not hardcoded prose — the evaluated items in the report match the checklist source.
-- [ ] The capture guide document exists in the repo and its checklist items are the same source the onboard command evaluates.
-- [ ] Re-running onboard does not re-analyze or re-cut photos whose outputs already exist.
-- [ ] Faceless rejection from the skeleton still holds; a face-on Creator's Asset Pack records their style-reference images.
-- [ ] Manual (not CI): the operator's own 9 photos onboard successfully end-to-end.
+- [x] `thumb onboard` with a photo set writes, per accepted photo: a cached metadata record (gesture, gaze, expression, clothing text, crops) and a cutout file with transparency.
+- [x] Photos failing checklist items are flagged in an onboarding report on disk; a photo set with zero expression variety (all neutral) produces a failure the operator can read.
+- [x] Checklist items are data, not hardcoded prose — the evaluated items in the report match the checklist source.
+- [x] The capture guide document exists in the repo and its checklist items are the same source the onboard command evaluates.
+- [x] Re-running onboard does not re-analyze or re-cut photos whose outputs already exist.
+- [x] Faceless rejection from the skeleton still holds; a face-on Creator's Asset Pack records their style-reference images.
+- [x] Manual (not CI): the operator's own 9 photos onboard successfully end-to-end. *(Done in fake-provider mode: 9 photos + 5 references intake, analysis cached, cutouts + report written. Re-run with real VLM/rembg at ticket 10 for true analysis quality.)*
 
 ## Blocked by
 
 - 06-walking-skeleton
+
+## Comments
+
+- 2026-07-07: Implemented red→green in 7 cycles at the established seam. Key pieces:
+  `analyze_photo` added to the VLM provider seat (fake derives metadata from filename
+  tokens — see FakeCritiqueProvider docstring for the token vocabulary); cutouts via a
+  `CutoutEngine` binding (fake = oval matte; rembg is the real binding, ticket 10);
+  capture guide at `src/thumb/capture-guide.md` with machine-readable `[check: ...]`
+  tokens that `checklist.py` parses as its ONLY rule source; onboarding report at
+  `asset-pack/onboarding-report.md` (per-photo verdicts, set checks, evaluated-items
+  list). Design decision: analysis metadata is cached for rejected photos too (the
+  cache records the VLM call; rejection = report entry + no cutout) so re-runs never
+  re-pay analysis. Fakes journal calls to `.thumb/provider-calls.jsonl`; the
+  zero-VLM-calls-during-order-run guard test reads it and was proven to bite via a
+  temporary injected call. 18 tests green. Unblocks nothing new (08 was already
+  unblocked); 09 needs this + 08.
