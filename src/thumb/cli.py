@@ -192,7 +192,7 @@ def main(argv=None):
     order_run = order_sub.add_parser("run", help="generate Candidates for an Order")
     order_run.add_argument("creator")
     order_run.add_argument("order")
-    order_run.add_argument("--n", type=int, default=3, help="number of candidates")
+    order_run.add_argument("--n", type=int, default=20, help="number of candidates")
     order_run.set_defaults(func=cmd_order_run)
 
     order_sheet = order_sub.add_parser("sheet", help="write the Contact Sheet HTML")

@@ -1,19 +1,37 @@
-"""Order pipeline: Brief -> Wording -> Background -> composite -> Candidates.
+"""Order pipeline: Brief -> Wording/Concepts -> style-conditioned Backgrounds ->
+compositor recipe -> Candidates.
 
-Walking-skeleton version: placeholder quality on purpose. Placement is a fixed
-rule (ticket 02 upgrades it), compositing is a naive paste (ticket 09 brings the
-real recipe). The shapes that matter — candidate files + metadata alongside,
-Subject as an optional layer, Status transitions — are the real ones.
+Placement is still the skeleton's fixed rule (flip only when it says so; ticket
+02 brings content-aware decisions). Every stage output lands in the Order
+folder so it is observable at the disk seam and reusable by Revisions.
 """
 
 import json
 
-from PIL import Image, ImageDraw, ImageFont
+from thumb import compositor, library, workspace
 
-from thumb import workspace
+CANVAS = compositor.CANVAS
+SAFE_MARGIN = compositor.SAFE_MARGIN
+SPECS_PER_ORDER = 3  # spread Candidates across 2-3 directions (PRD story 12)
+WORDINGS_PER_ORDER = 4  # 3-5 proposals per Order (PRD story 16)
+CONCEPTS_PER_SPEC = 3
 
-CANVAS = (1280, 720)
-SAFE_MARGIN = 64
+# The prototype's single biggest quality lever: restrained, flat-graphic
+# backdrops instead of the model's default cinematic scenes.
+RESTRAINT_RULES = (
+    "one focal element, generous negative space, one accent color, "
+    "no clutter, no dense texture, no busy patterns"
+)
+
+
+def _background_prompt(spec, concept):
+    palette = ", ".join(spec["palette"])
+    return (
+        f"Flat graphic YouTube thumbnail backdrop, 16:9. {spec['backdrop']}. "
+        f"Palette {palette}, accent {spec['accent']}. {concept}. "
+        f"{RESTRAINT_RULES}. "
+        f"No people, no faces, no text, no letters, no logos."
+    )
 
 
 def _asset_photos(root, creator):
@@ -23,57 +41,77 @@ def _asset_photos(root, creator):
     return sorted(p for p in photos_dir.iterdir() if p.suffix.lower() in {".png", ".jpg", ".jpeg"})
 
 
-def _compose(background, photo_path, wording):
-    """Naive composite; returns (image, placement, layout_boxes)."""
-    canvas = background.resize(CANVAS)
-
-    placement = {"flip": False, "side": "right", "scale": 0.6, "crop": "full"}
-    subject_box = None
-    if photo_path is not None:
-        with Image.open(photo_path) as photo:
-            target_h = int(CANVAS[1] * placement["scale"])
-            target_w = int(photo.width * target_h / photo.height)
-            subject = photo.resize((target_w, target_h))
-        x = CANVAS[0] - target_w - SAFE_MARGIN
-        y = CANVAS[1] - target_h
-        canvas.paste(subject, (x, y))
-        subject_box = [x, y, target_w, target_h]
-
-    draw = ImageDraw.Draw(canvas)
-    font = ImageFont.load_default(size=64)
-    text_xy = (SAFE_MARGIN, SAFE_MARGIN)
-    bbox = draw.textbbox(text_xy, wording, font=font)
-    draw.text(text_xy, wording, font=font, fill=(255, 255, 255))
-    text_box = [bbox[0], bbox[1], bbox[2] - bbox[0], bbox[3] - bbox[1]]
-
-    return canvas, placement, {"text": text_box, "subject": subject_box}
+def _cutouts(root, creator):
+    cutouts_dir = workspace.creator_dir(root, creator) / "asset-pack" / "cutouts"
+    if not cutouts_dir.is_dir():
+        return []
+    return sorted(cutouts_dir.glob("*.png"))
 
 
-def run_order(root, creator, order_id, providers, n=3):
+def run_order(root, creator, order_id, providers, n=20):
     order_doc = workspace.order_doc(root, creator, order_id)
     brief = workspace.read_fields(order_doc)
-    photos = _asset_photos(root, creator)
-    photo = photos[0] if photos else None
+    niche = workspace.read_fields(workspace.creator_doc(root, creator))["Niche"]
+    specs = library.list_specs(root, niche, creator=creator)[:SPECS_PER_ORDER]
+    if not specs:
+        raise SystemExit(
+            f"no style specs for niche {niche!r} — seed the Style Library first"
+        )
+    photo_names = {p.stem: p.name for p in _asset_photos(root, creator)}
+    cutouts = _cutouts(root, creator)
 
-    wordings = providers.wording.propose_wordings(brief["Title"], brief["Hook"], n)
+    wordings = providers.wording.propose_wordings(
+        brief["Title"], brief["Hook"], WORDINGS_PER_ORDER
+    )
+    concepts = {
+        spec["name"]: providers.wording.propose_concepts(
+            brief["Title"], brief["Hook"], spec["backdrop"], CONCEPTS_PER_SPEC
+        )
+        for spec in specs
+    }
 
-    cand_dir = workspace.order_dir(root, creator, order_id) / "candidates"
+    order_dir = workspace.order_dir(root, creator, order_id)
+    bg_dir = order_dir / "backgrounds"
+    cand_dir = order_dir / "candidates"
+    bg_dir.mkdir(exist_ok=True)
     cand_dir.mkdir(exist_ok=True)
     for i in range(n):
+        spec = specs[i % len(specs)]
         wording = wordings[i % len(wordings)]
-        prompt = f"background for '{brief['Title']}' — variant {i + 1}"
+        spec_concepts = concepts[spec["name"]]
+        concept = spec_concepts[(i // len(specs)) % len(spec_concepts)]
+        cutout = cutouts[i % len(cutouts)] if cutouts else None
+
+        prompt = _background_prompt(spec, concept)
         background = providers.background.generate_background(prompt, CANVAS)
-        canvas, placement, layout_boxes = _compose(background, photo, wording)
+        bg_name = f"bg-{i + 1:02d}.png"
+        background.save(bg_dir / bg_name)
+
+        # the skeleton placement rule — flip only when this decision says so
+        # (always False until ticket 02's content-aware logic)
+        placement = {"flip": False, "side": "right", "scale": 0.88, "crop": "full"}
+        canvas, layout_boxes = compositor.compose(
+            background, cutout, wording, spec, placement
+        )
 
         stem = cand_dir / f"cand-{i + 1:02d}"
         canvas.save(stem.with_suffix(".png"))
         metadata = {
             "wording": wording,
-            "source_photo": photo.name if photo else None,
+            "concept": concept,
+            "source_photo": photo_names.get(cutout.stem, cutout.name) if cutout else None,
+            "background": bg_name,
             "background_prompt": prompt,
             "placement": placement,
             "layout_boxes": layout_boxes,
-            "style_spec": None,  # arrives with the Style Library (ticket 08)
+            "style_spec": spec["name"],
+            "text_device": spec["text_device"],
+            "cost_usd": 0.0,  # fakes are free; the real ledger lands with ticket 10
+            # ADR-0001: when no photo can serve the Subject, say so — never
+            # regenerate or repaint identity to fill the gap
+            "limitation": None if cutout else (
+                "source-photo limitation: no Asset Pack cutout available for this Concept"
+            ),
         }
         stem.with_suffix(".json").write_text(
             json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8"

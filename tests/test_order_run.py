@@ -26,10 +26,10 @@ def start_order(thumb, make_photo=None, creator="srikar"):
 def test_order_run_produces_candidates_with_metadata(thumb, make_photo):
     order_dir = start_order(thumb, make_photo)
 
-    thumb("order", "run", "srikar", "001")
+    thumb("order", "run", "srikar", "001", "--n", "3")
 
     pngs = sorted((order_dir / "candidates").glob("*.png"))
-    assert len(pngs) == 3  # skeleton default
+    assert len(pngs) == 3
     for png in pngs:
         with Image.open(png) as image:
             assert image.size == (1280, 720)
@@ -48,7 +48,7 @@ def test_order_run_without_photos_represents_subject_as_absent_layer(thumb):
     # ADR-0005: "no Subject" must be a representable state, not a crash.
     order_dir = start_order(thumb, make_photo=None)
 
-    thumb("order", "run", "srikar", "001")
+    thumb("order", "run", "srikar", "001", "--n", "3")
 
     pngs = sorted((order_dir / "candidates").glob("*.png"))
     assert len(pngs) == 3

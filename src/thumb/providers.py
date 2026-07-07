@@ -41,7 +41,11 @@ class _NullLog:
 
 
 class WordingProvider(Protocol):
+    """The LLM seat (ADR-0002): Wording copywriting AND Concept ideation."""
+
     def propose_wordings(self, title: str, hook: str, n: int) -> list[str]: ...
+
+    def propose_concepts(self, title: str, hook: str, backdrop: str, n: int) -> list[str]: ...
 
 
 class BackgroundProvider(Protocol):
@@ -59,15 +63,37 @@ class CritiqueProvider(Protocol):
 
 
 class FakeWordingProvider:
-    SUFFIXES = ["", "EXPOSED", "SECRETS", "NOW", "THE TRUTH"]
+    """Deterministic copywriting stand-in: 3-5 word ALL-CAPS lines built around
+    the title's lead word — never an echo of the title itself."""
 
     def __init__(self, log=None):
         self._log = log or _NullLog()
 
     def propose_wordings(self, title, hook, n):
         self._log.record("wording", "propose_wordings", title)
-        base = " ".join(title.upper().split()[:3]) or "UNTITLED"
-        return [f"{base} {suffix}".strip() for suffix in self.SUFFIXES[:n]]
+        lead = (title.upper().split() or ["THIS"])[0]
+        proposals = [
+            f"WHY {lead}S FAIL YOU",
+            f"THE {lead} MISTAKE",
+            f"STOP BREAKING YOUR {lead}S",
+            f"THE TRUTH ABOUT {lead}S",
+            f"{lead}S DONE RIGHT",
+        ]
+        return proposals[:n]
+
+    def propose_concepts(self, title, hook, backdrop, n):
+        self._log.record("wording", "propose_concepts", f"{title} | {backdrop}")
+        lead = (title.lower().split() or ["the idea"])[0]
+        glyphs = [
+            "circular-arrows glyph",
+            "glossy infinity symbol",
+            "cracked gear",
+            "tangled wire knot",
+        ]
+        return [
+            f"ONE bold minimalist {glyph} suggesting {lead}, floating off-center"
+            for glyph in glyphs[:n]
+        ]
 
 
 class FakeBackgroundProvider:

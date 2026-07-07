@@ -1,6 +1,6 @@
 # Candidate composition: style-conditioned generation + the validated compositor recipe
 
-Status: ready-for-agent
+Status: ready-for-human (implemented via TDD 2026-07-07; awaiting operator review)
 
 ## Parent
 
@@ -45,3 +45,31 @@ At the CLI-over-disk seam with fake providers:
 
 - 07-onboard-asset-pack
 - 08-style-library
+
+## Comments
+
+- 2026-07-07: Implemented red→green in 6 cycles at the established seam
+  (tests/test_candidate_composition.py). The prototype recipe now lives in
+  `src/thumb/compositor.py` (prep_subject, drop_shadow, styled text devices,
+  compose); `pipeline.run_order` defaults to 20 Candidates spread round-robin
+  across ≤3 specs from `library.list_specs`, composites from Asset Pack
+  *cutouts*, and persists each background layer to `orders/<id>/backgrounds/`
+  (resumability groundwork + ticket 03's icon-locate input). Notes for
+  reviewers:
+  - Real defect caught by strengthening a weak test: Pillow's LANCZOS resize
+    premultiplies RGBA, so `autocontrast` saw the transparent region as black
+    and blew flat subjects to white. Fix: histogram masked to the subject
+    (`opaque`) and skipped entirely when `_trimmed_span < 64` (nothing to
+    recover). The subject-presence test was proven able to bite via an
+    injected skip of `alpha_composite`; the safe-margin test via an injected
+    zone x0=4.
+  - `propose_concepts` joined the LLM provider seat (Concepts derive from
+    Brief + spec backdrop, per PRD story 17).
+  - Placement is still the fixed rule (side=right, scale=0.88, flip=False —
+    "flip only when placement logic says so"); ticket 02 upgrades it.
+  - `limitation: "source-photo limitation: …"` appears in candidate metadata
+    when no cutout exists (ADR-0001); `cost_usd: 0.0` placeholder until the
+    real ledger (ticket 10).
+  - Skeleton tests that encoded the old 3-candidate default now pass `--n 3`.
+  30 tests green. `scratch/prototype/` is now absorbable — deleting it is the
+  separate cleanup the PRD names. Unblocks ticket 10 (real Gemini) and 01–03.
