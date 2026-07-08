@@ -21,15 +21,17 @@ def thumb(tmp_path):
     must work with no key and no network.
     """
 
-    def run(*args, check=True):
-        env = os.environ.copy()
-        env.pop("GEMINI_API_KEY", None)
+    def run(*args, check=True, env=None):
+        merged = os.environ.copy()
+        merged.pop("GEMINI_API_KEY", None)
+        if env:
+            merged.update(env)  # per-test scripting (THUMB_* knobs, sentinel keys)
         result = subprocess.run(
             [sys.executable, "-m", "thumb", *args],
             cwd=tmp_path,
             capture_output=True,
             text=True,
-            env=env,
+            env=merged,
         )
         if check:
             assert result.returncode == 0, (

@@ -5,6 +5,10 @@ description = "Done-for-you YouTube thumbnail pipeline: CLI over plain files (AD
 requires-python = ">=3.12"
 dependencies = ["pillow"]
 
+[project.optional-dependencies]
+# the real provider binding (THUMB_PROVIDERS=gemini); fake mode needs neither
+real = ["google-genai", "rembg"]
+
 [project.scripts]
 thumb = "thumb.cli:main"
 

@@ -2,8 +2,13 @@ from test_order_run import start_order
 
 
 def snapshot(order_dir):
+    # order.md mutates (Status:) and ledger.jsonl is an append-only account of
+    # real spend — a re-run genuinely spends again, so it may never be reset to
+    # look deterministic. Everything generated must be byte-identical.
     files = sorted(
-        p for p in order_dir.rglob("*") if p.is_file() and p.name != "order.md"
+        p
+        for p in order_dir.rglob("*")
+        if p.is_file() and p.name not in ("order.md", "ledger.jsonl")
     )
     return {p.relative_to(order_dir).as_posix(): p.read_bytes() for p in files}
 

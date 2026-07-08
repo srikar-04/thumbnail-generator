@@ -86,8 +86,11 @@ def cmd_order_run(args):
     if not order_doc.exists():
         print(f"unknown order: {args.creator}/{args.order}", file=sys.stderr)
         return 1
+    ledger_path = workspace.order_dir(args.root, args.creator, args.order) / "ledger.jsonl"
     n = pipeline.run_order(
-        args.root, args.creator, args.order, providers.get_providers(args.root), n=args.n
+        args.root, args.creator, args.order,
+        providers.get_providers(args.root, ledger_path=ledger_path),
+        n=args.n,
     )
     print(f"generated {n} candidates for {args.creator}/{args.order}")
     return 0

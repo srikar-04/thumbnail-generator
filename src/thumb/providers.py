@@ -6,14 +6,48 @@ Binding is configuration (THUMB_PROVIDERS env var), never a code change.
 Fakes need no network and no API key.
 """
 
+import functools
 import hashlib
 import json
 import os
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
 from PIL import Image
+
+RETRY_ATTEMPTS = 5
+
+
+class TransientProviderError(Exception):
+    """A 503/429-class failure worth retrying (the prototype hit these
+    frequently on flash-lite under load)."""
+
+
+def _is_transient(exc):
+    if isinstance(exc, TransientProviderError):
+        return True
+    # google-genai errors (ServerError/ClientError) carry the HTTP code
+    return getattr(exc, "code", None) in (429, 503)
+
+
+def retry_transient(fn):
+    """Retry with exponential backoff on transient failures. Lives in the
+    provider layer so a half-finished Order never dies to one 503."""
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        base = float(os.environ.get("THUMB_RETRY_BASE_SECONDS", "2"))
+        for attempt in range(RETRY_ATTEMPTS):
+            try:
+                return fn(*args, **kwargs)
+            except Exception as exc:
+                if not _is_transient(exc) or attempt == RETRY_ATTEMPTS - 1:
+                    raise
+                time.sleep(min(base * 2**attempt, 30))
+
+    return wrapper
 
 
 class CallLog:
@@ -37,6 +71,37 @@ class CallLog:
 
 class _NullLog:
     def record(self, provider, method, detail):
+        pass
+
+
+class Ledger:
+    """Raw per-call cost writes (PRD story 35, raw writes only). One JSON line
+    per model call: role, model, units consumed, cost. Reporting comes in a
+    later milestone; the data just has to land. Never contains the API key."""
+
+    def __init__(self, path):
+        self.path = Path(path)
+
+    def add(self, role, method, model, units, cost_usd):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.path, "a", encoding="utf-8") as f:
+            f.write(
+                json.dumps(
+                    {
+                        "role": role,
+                        "method": method,
+                        "model": model,
+                        "units": units,
+                        "cost_usd": round(cost_usd, 6),
+                    },
+                    sort_keys=True,
+                )
+                + "\n"
+            )
+
+
+class _NullLedger:
+    def add(self, role, method, model, units, cost_usd):
         pass
 
 
@@ -66,11 +131,13 @@ class FakeWordingProvider:
     """Deterministic copywriting stand-in: 3-5 word ALL-CAPS lines built around
     the title's lead word — never an echo of the title itself."""
 
-    def __init__(self, log=None):
+    def __init__(self, log=None, ledger=None):
         self._log = log or _NullLog()
+        self._ledger = ledger or _NullLedger()
 
     def propose_wordings(self, title, hook, n):
         self._log.record("wording", "propose_wordings", title)
+        self._ledger.add("wording", "propose_wordings", "fake", {"calls": 1}, 0.0)
         lead = (title.upper().split() or ["THIS"])[0]
         proposals = [
             f"WHY {lead}S FAIL YOU",
@@ -83,6 +150,7 @@ class FakeWordingProvider:
 
     def propose_concepts(self, title, hook, backdrop, n):
         self._log.record("wording", "propose_concepts", f"{title} | {backdrop}")
+        self._ledger.add("wording", "propose_concepts", "fake", {"calls": 1}, 0.0)
         lead = (title.lower().split() or ["the idea"])[0]
         glyphs = [
             "circular-arrows glyph",
@@ -97,11 +165,21 @@ class FakeWordingProvider:
 
 
 class FakeBackgroundProvider:
-    def __init__(self, log=None):
+    def __init__(self, log=None, ledger=None):
         self._log = log or _NullLog()
+        self._ledger = ledger or _NullLedger()
+        # THUMB_FAKE_503S=N scripts the first N calls to fail transiently, so
+        # tests can prove retry/backoff at the seam with no real network
+        self._fail_remaining = int(os.environ.get("THUMB_FAKE_503S", "0"))
 
+    @retry_transient
     def generate_background(self, prompt, size):
+        if self._fail_remaining > 0:
+            self._fail_remaining -= 1
+            self._log.record("background", "transient-503", prompt)
+            raise TransientProviderError("scripted 503")
         self._log.record("background", "generate_background", prompt)
+        self._ledger.add("background", "generate_background", "fake", {"images": 1}, 0.0)
         digest = hashlib.sha256(prompt.encode("utf-8")).digest()
         base = tuple(v // 2 for v in digest[:3])  # dark half-range
         accent = tuple(128 + v // 2 for v in digest[3:6])  # light half-range
@@ -131,15 +209,18 @@ class FakeCritiqueProvider:
 
     EXPRESSIONS = ("shock", "grimace", "joy", "curious")
 
-    def __init__(self, log=None):
+    def __init__(self, log=None, ledger=None):
         self._log = log or _NullLog()
+        self._ledger = ledger or _NullLedger()
 
     def review(self, image, checklist):
         self._log.record("critique", "review", "candidate")
+        self._ledger.add("critique", "review", "fake", {"calls": 1}, 0.0)
         return {"defects": []}
 
     def analyze_photo(self, photo_path):
         self._log.record("critique", "analyze_photo", Path(photo_path).name)
+        self._ledger.add("critique", "analyze_photo", "fake", {"calls": 1}, 0.0)
 
         stem = Path(photo_path).stem.lower()
         gesture = next(
@@ -161,6 +242,7 @@ class FakeCritiqueProvider:
     def extract_style_spec(self, reference_path):
         stem = Path(reference_path).stem.lower()
         self._log.record("critique", "extract_style_spec", Path(reference_path).name)
+        self._ledger.add("critique", "extract_style_spec", "fake", {"calls": 1}, 0.0)
 
         backdrop = next(
             (text for token, text in self.BACKDROPS.items() if token in stem),
@@ -217,14 +299,21 @@ class Providers:
     cutout: CutoutEngine
 
 
-def get_providers(root=".", name=None):
+def get_providers(root=".", name=None, ledger_path=None):
     name = name or os.environ.get("THUMB_PROVIDERS", "fake")
+    # non-Order calls (onboarding analysis, style extraction) bill to the
+    # workspace ledger; `order run` redirects to the Order's own ledger
+    ledger = Ledger(ledger_path or Path(root) / ".thumb" / "ledger.jsonl")
     if name == "fake":
         log = CallLog(Path(root) / ".thumb" / "provider-calls.jsonl")
         return Providers(
-            wording=FakeWordingProvider(log),
-            background=FakeBackgroundProvider(log),
-            critique=FakeCritiqueProvider(log),
+            wording=FakeWordingProvider(log, ledger),
+            background=FakeBackgroundProvider(log, ledger),
+            critique=FakeCritiqueProvider(log, ledger),
             cutout=FakeCutoutEngine(),
         )
-    raise SystemExit(f"unknown provider binding: {name!r} (available: fake)")
+    if name == "gemini":
+        from thumb import gemini  # deferred: fake mode must not need the SDK
+
+        return gemini.bind(root, ledger)
+    raise SystemExit(f"unknown provider binding: {name!r} (available: fake, gemini)")
