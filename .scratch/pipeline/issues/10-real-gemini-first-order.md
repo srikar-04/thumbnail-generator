@@ -73,3 +73,33 @@ Manual (milestone exit, operator-performed):
     staged manual run (2–3 candidates first, then 20).
   34 tests green. New: `docs/reference-curation.md` (manual Style Library
   growth playbook). Milestone-exit run instructions delivered to operator.
+- 2026-07-08 (later): First real run (staged, --n 3, ₹8.7 per ledger) produced
+  FACELESS candidates. Diagnosis from artifacts: not a compositor/path bug —
+  the capture checklist rejected all 11 photos (real VLM: flat lighting on
+  all, busy background on several; verdicts audited against a sample photo
+  and judged fair — casual WhatsApp selfies), so `analyze_photos` never
+  created `cutouts/`, and `order run` correctly fired the ADR-0001
+  source-photo limitation… silently, while spending. Three fixes, TDD:
+  - `checklist.py`: reason regex now captures wrapped guide lines (reports
+    quoted rules truncated mid-sentence, hiding WHY photos failed).
+  - `onboard` prints accepted/rejected counts + report path; exits 1 when
+    zero photos survive the checklist.
+  - `order run` refuses up front (before any provider call, nothing billed)
+    for a face-on creator with no cutouts, naming the report and the new
+    `--allow-faceless-candidates` override; ADR-0005's faceless path now
+    requires that explicit flag (two existing tests updated accordingly).
+  38 tests green. Milestone exit still pending: operator reshoots per
+  capture-guide.md, re-onboards, re-runs staged.
+- 2026-07-12: Real-run crash #2: `onboard` on THUMB_PROVIDERS=gemini died
+  with JSONDecodeError in `_json_call` — the live VLM broke JSON mode's
+  promise (fences/prose around the payload). Cause confirmed by a new
+  offline red loop: `tests/stubs/` shadows google.genai + rembg via
+  PYTHONPATH so seam tests drive the REAL gemini.py binding with a replayed
+  bad response — no network, no key, no credits. Fix in gemini.py only
+  (fakes untouched): `_parse_model_json` tries the clean parse, then
+  `raw_decode` from the first `{`/`[` (handles fences, prose, trailing
+  "Extra data"); a reply with no JSON at all raises TransientProviderError
+  so the existing retry takes one more swing instead of killing the Order.
+  Regression test: `test_gemini_binding_survives_fence_wrapped_vlm_json`
+  (onboard completes, fenced payload lands as clean cached metadata, call
+  billed at real prices). 39 tests green.

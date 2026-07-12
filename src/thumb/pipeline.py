@@ -48,10 +48,11 @@ def _cutouts(root, creator):
     return sorted(cutouts_dir.glob("*.png"))
 
 
-def run_order(root, creator, order_id, providers, n=20):
+def run_order(root, creator, order_id, providers, n=20, allow_faceless=False):
     order_doc = workspace.order_doc(root, creator, order_id)
     brief = workspace.read_fields(order_doc)
-    niche = workspace.read_fields(workspace.creator_doc(root, creator))["Niche"]
+    creator_fields = workspace.read_fields(workspace.creator_doc(root, creator))
+    niche = creator_fields["Niche"]
     specs = library.list_specs(root, niche, creator=creator)[:SPECS_PER_ORDER]
     if not specs:
         raise SystemExit(
@@ -59,6 +60,17 @@ def run_order(root, creator, order_id, providers, n=20):
         )
     photo_names = {p.stem: p.name for p in _asset_photos(root, creator)}
     cutouts = _cutouts(root, creator)
+    if creator_fields.get("Face") == "on" and not cutouts and not allow_faceless:
+        # gate BEFORE any provider call: a face-on Order with no cutouts can
+        # only produce faceless, unsellable candidates — refuse to spend
+        report = workspace.creator_dir(root, creator) / "asset-pack" / "onboarding-report.md"
+        raise SystemExit(
+            f"refusing to run: {creator!r} is a face-on creator but the Asset "
+            f"Pack has no cutouts, so every candidate would come out faceless. "
+            f"See {report} (capture-checklist rejections?) and re-onboard with "
+            f"usable photos — or pass --allow-faceless-candidates to spend on "
+            f"this deliberately."
+        )
 
     wordings = providers.wording.propose_wordings(
         brief["Title"], brief["Hook"], WORDINGS_PER_ORDER

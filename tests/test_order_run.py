@@ -44,11 +44,55 @@ def test_order_run_produces_candidates_with_metadata(thumb, make_photo):
     assert "Status: generated" in (order_dir / "order.md").read_text(encoding="utf-8")
 
 
+def test_order_run_refuses_to_spend_when_a_face_on_creator_has_no_cutouts(thumb, make_photo):
+    # Milestone-run regression (2026-07-08): the capture checklist rejected
+    # every photo, so no cutouts existed — and `order run` silently spent real
+    # credits on faceless, unsellable candidates. It must refuse up front,
+    # before ANY provider call.
+    shoot = thumb.root / "shoot"
+    make_photo(shoot / "face-flat.png")  # flat lighting -> checklist-rejected
+    thumb(
+        "onboard", "srikar",
+        "--niche", "tech-explainer",
+        "--face", "on",
+        "--brand-color", "#D82C2C",
+        "--photos", str(shoot),
+        check=False,  # zero accepted photos now fails loudly
+    )
+    thumb(
+        "order", "new", "srikar",
+        "--title", "Loop Engineering",
+        "--hook", "Why your loops fail and how to see it coming",
+    )
+    order_dir = thumb.root / "creators" / "srikar" / "orders" / "001"
+
+    result = thumb("order", "run", "srikar", "001", check=False)
+
+    assert result.returncode != 0
+    assert "onboarding-report.md" in result.stderr, (
+        "the error must point the operator at WHY there are no cutouts"
+    )
+    assert "--allow-faceless-candidates" in result.stderr, (
+        "the deliberate override must be named"
+    )
+    assert not list((order_dir / "candidates").glob("*.png"))
+    # refused before any provider call: nothing journaled for the run, nothing billed
+    journal = thumb.root / ".thumb" / "provider-calls.jsonl"
+    run_methods = {"propose_wordings", "propose_concepts", "generate_background"}
+    calls = [
+        json.loads(line)["method"]
+        for line in journal.read_text(encoding="utf-8").splitlines()
+    ]
+    assert not run_methods & set(calls), f"provider calls happened before the gate: {calls}"
+    assert not (order_dir / "ledger.jsonl").exists()
+
+
 def test_order_run_without_photos_represents_subject_as_absent_layer(thumb):
-    # ADR-0005: "no Subject" must be a representable state, not a crash.
+    # ADR-0005: "no Subject" must be a representable state, not a crash —
+    # but only behind the explicit operator override, never by accident.
     order_dir = start_order(thumb, make_photo=None)
 
-    thumb("order", "run", "srikar", "001", "--n", "3")
+    thumb("order", "run", "srikar", "001", "--n", "3", "--allow-faceless-candidates")
 
     pngs = sorted((order_dir / "candidates").glob("*.png"))
     assert len(pngs) == 3

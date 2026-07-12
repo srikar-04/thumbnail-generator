@@ -10,3 +10,4 @@ __pycache__/
 
 # live client data (Creator folders: photos, orders) — never commit
 creators/
+style-library/

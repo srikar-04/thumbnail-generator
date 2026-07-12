@@ -98,6 +98,21 @@ def test_checklist_rejects_failing_photos_with_reasons_in_report(thumb, make_pho
     assert (pack / "cutouts" / "face-shock.png").exists()
 
 
+def test_rejection_reasons_carry_the_guides_full_sentence_not_a_truncated_line(thumb, make_photo):
+    # Milestone-run regression (2026-07-08): the guide's rules wrap across
+    # lines, and the report quoted only the first line — "…window light or"
+    # read as garbage and hid WHY the photo failed.
+    pack, _ = onboard_with_photos(thumb, make_photo, ["face-flat.png"], check=False)
+
+    report = (pack / "onboarding-report.md").read_text(encoding="utf-8")
+    assert "window light or a single lamp at roughly 45" in report, (
+        "the lighting rule's continuation line must survive into the report"
+    )
+    assert not re.search(r"window light or\s*$", report, re.MULTILINE), (
+        "no reason may end mid-sentence at the guide's line wrap"
+    )
+
+
 def test_neutral_only_photo_set_produces_readable_set_failure(thumb, make_photo):
     pack, _ = onboard_with_photos(
         thumb, make_photo,
@@ -117,6 +132,31 @@ def test_varied_expression_set_passes_set_checks(thumb, make_photo):
 
     report = (pack / "onboarding-report.md").read_text(encoding="utf-8")
     assert "expression-variety: ok" in report
+
+
+def test_onboard_surfaces_acceptance_counts_and_points_at_the_report(thumb, make_photo):
+    _, result = onboard_with_photos(
+        thumb, make_photo, ["face-shock.png", "face-flat.png"]
+    )
+
+    out = result.stdout + result.stderr
+    assert "accepted 1" in out and "rejected 1" in out, (
+        "the operator must see the checklist verdict without opening the report"
+    )
+    assert "onboarding-report.md" in out
+
+
+def test_onboard_fails_loudly_when_no_photo_survives_the_checklist(thumb, make_photo):
+    # Milestone-run regression (2026-07-08): all 11 real photos were rejected
+    # and onboard still printed plain success — the operator only found out
+    # after spending credits on a faceless order.
+    _, result = onboard_with_photos(
+        thumb, make_photo, ["face-flat.png", "face-busy-flat.png"], check=False
+    )
+
+    assert result.returncode != 0
+    assert "no photos accepted" in result.stderr
+    assert "onboarding-report.md" in result.stderr
 
 
 def test_capture_guide_exists_and_is_the_checklist_source(thumb, make_photo):

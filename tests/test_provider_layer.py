@@ -8,6 +8,7 @@ manual milestone-exit run, never here. All assertions are on disk artifacts
 
 import json
 from collections import Counter
+from pathlib import Path
 
 from test_order_run import start_order
 
@@ -82,6 +83,45 @@ def test_real_binding_is_selected_by_configuration_not_a_code_change(thumb, make
     assert not list((order_dir / "candidates").glob("*.png")), (
         "must fail fast at key loading, before generating anything"
     )
+
+
+def test_gemini_binding_survives_fence_wrapped_vlm_json(thumb, make_photo):
+    # Regression (2026-07-12): the real VLM wrapped its JSON in markdown code
+    # fences with trailing prose (despite JSON mode), and `onboard` died with
+    # JSONDecodeError. Drive the REAL gemini binding with the SDK shadowed by
+    # tests/stubs (PYTHONPATH wins over site-packages) — no network, no key,
+    # no credits — replaying that exact response shape.
+    stubs = str(Path(__file__).parent / "stubs")
+    env = {
+        "THUMB_PROVIDERS": "gemini",
+        "GEMINI_API_KEY": "stub-key-never-real",
+        "PYTHONPATH": stubs,
+    }
+
+    shoot = thumb.root / "shoot"
+    make_photo(shoot / "portrait.png")
+    result = thumb(
+        "onboard", "srikar",
+        "--niche", "tech-explainer",
+        "--face", "on",
+        "--brand-color", "#D82C2C",
+        "--photos", str(shoot),
+        env=env,
+    )
+
+    assert "accepted 1" in result.stdout
+    pack = thumb.root / "creators" / "srikar" / "asset-pack"
+    metadata = json.loads((pack / "photos" / "portrait.json").read_text(encoding="utf-8"))
+    assert metadata["lighting"] == "directional", (
+        "the fenced payload must be parsed into clean cached metadata"
+    )
+    assert (pack / "cutouts" / "portrait.png").exists()
+
+    # the real binding billed the call at real prices (not the fake's zeros)
+    entries = read_jsonl(thumb.root / ".thumb" / "ledger.jsonl")
+    analyze = [e for e in entries if e["method"] == "analyze_photo"]
+    assert analyze and analyze[0]["model"] == "gemini-2.5-flash-lite"
+    assert analyze[0]["cost_usd"] > 0
 
 
 def test_the_api_key_never_appears_in_output_or_on_disk(thumb, make_photo):

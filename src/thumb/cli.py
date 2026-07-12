@@ -34,11 +34,25 @@ def cmd_onboard(args):
             if src.suffix.lower() in {".png", ".jpg", ".jpeg"}:
                 shutil.copy2(src, photo_dir / src.name)
         bound = providers.get_providers(args.root)
-        analyzed = assetpack.analyze_photos(
+        intake = assetpack.analyze_photos(
             args.root, args.creator, bound.critique, bound.cutout
         )
-        if analyzed:
-            print(f"analyzed {len(analyzed)} photo(s)")
+        if intake.analyzed:
+            print(f"analyzed {len(intake.analyzed)} photo(s)")
+        report = cdir / "asset-pack" / "onboarding-report.md"
+        if intake.accepted or intake.rejected:
+            print(
+                f"accepted {len(intake.accepted)} photo(s), rejected "
+                f"{len(intake.rejected)} — see {report}"
+            )
+        if intake.rejected and not intake.accepted:
+            print(
+                f"no photos accepted — every photo failed the capture checklist, "
+                f"so no cutouts exist and Orders cannot run. See {report} and "
+                f"reshoot per capture-guide.md.",
+                file=sys.stderr,
+            )
+            return 1
     if args.references:
         ref_dir = cdir / "asset-pack" / "references"
         ref_dir.mkdir(parents=True, exist_ok=True)
@@ -91,6 +105,7 @@ def cmd_order_run(args):
         args.root, args.creator, args.order,
         providers.get_providers(args.root, ledger_path=ledger_path),
         n=args.n,
+        allow_faceless=args.allow_faceless_candidates,
     )
     print(f"generated {n} candidates for {args.creator}/{args.order}")
     return 0
@@ -196,6 +211,12 @@ def main(argv=None):
     order_run.add_argument("creator")
     order_run.add_argument("order")
     order_run.add_argument("--n", type=int, default=20, help="number of candidates")
+    order_run.add_argument(
+        "--allow-faceless-candidates",
+        action="store_true",
+        help="deliberately run a face-on creator's Order with no Subject layer "
+        "(default: refuse when the Asset Pack has no cutouts)",
+    )
     order_run.set_defaults(func=cmd_order_run)
 
     order_sheet = order_sub.add_parser("sheet", help="write the Contact Sheet HTML")

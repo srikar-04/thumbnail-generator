@@ -14,7 +14,8 @@ import re
 from functools import cache
 from importlib import resources
 
-_PHOTO_RE = re.compile(r"\[check:\s*([a-z-]+)\s*=\s*([a-z]+)\]\s*(.+)")
+# a rule's reason may wrap onto indented continuation lines — capture them all
+_PHOTO_RE = re.compile(r"\[check:\s*([a-z-]+)\s*=\s*([a-z]+)\]\s*(.+(?:\n[ \t]+\S.*)*)")
 _SET_MIN_RE = re.compile(r"\[check-set:\s*([a-z-]+)\s*>=\s*(\d+)\]")
 _SET_RANGE_RE = re.compile(r"\[check-set:\s*([a-z-]+)\s+(\d+)-(\d+)\]")
 
@@ -28,7 +29,7 @@ def load():
     """Parse the guide into (photo_checks, set_minimums, set_ranges)."""
     text = guide_text()
     photo_checks = [
-        (field, {"false": False, "true": True}.get(value, value), reason.strip())
+        (field, {"false": False, "true": True}.get(value, value), " ".join(reason.split()))
         for field, value, reason in _PHOTO_RE.findall(text)
     ]
     set_minimums = {check_id: int(n) for check_id, n in _SET_MIN_RE.findall(text)}

@@ -5,10 +5,15 @@ never happens during `order run`.
 """
 
 import json
+from collections import namedtuple
 
 from thumb import checklist, workspace
 
 PHOTO_SUFFIXES = {".png", ".jpg", ".jpeg"}
+
+# analyzed: newly analyzed this run (cache misses); accepted/rejected: names,
+# per the capture checklist, across the whole Asset Pack
+IntakeResult = namedtuple("IntakeResult", "analyzed accepted rejected")
 
 
 def photos_dir(root, creator):
@@ -28,7 +33,7 @@ def analyze_photos(root, creator, vlm, cutout_engine):
     of it and write the onboarding report."""
     pdir = photos_dir(root, creator)
     if not pdir.is_dir():
-        return []
+        return IntakeResult([], [], [])
 
     cdir = cutouts_dir(root, creator)
     analyzed, accepted, rejected = [], [], []
@@ -55,7 +60,7 @@ def analyze_photos(root, creator, vlm, cutout_engine):
 
     set_results = checklist.evaluate_set([m for _, m in accepted])
     _write_report(root, creator, accepted, rejected, set_results)
-    return analyzed
+    return IntakeResult(analyzed, [n for n, _ in accepted], [n for n, _ in rejected])
 
 
 def _write_report(root, creator, accepted, rejected, set_results):

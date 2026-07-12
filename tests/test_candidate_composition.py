@@ -187,9 +187,11 @@ def test_composite_contains_the_subject_cutout_and_never_touches_the_source(thum
 def test_missing_cutouts_surface_a_source_photo_limitation(thumb):
     # ADR-0001: identity is absolute — when no Asset Pack photo can serve the
     # Subject layer, the pipeline says so instead of degrading identity.
+    # (Reaching this path at all now requires the explicit operator override —
+    # by default a face-on creator with no cutouts refuses to run.)
     order_dir = start_order(thumb, make_photo=None)
 
-    thumb("order", "run", "srikar", "001")
+    thumb("order", "run", "srikar", "001", "--allow-faceless-candidates")
 
     for png in candidates(order_dir):
         meta = read_meta(png)

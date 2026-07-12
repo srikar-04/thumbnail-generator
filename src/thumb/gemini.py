@@ -69,13 +69,35 @@ def _text_cost(response):
     return {"tokens_in": tokens_in, "tokens_out": tokens_out}, cost
 
 
+def _parse_model_json(text):
+    """The real model sometimes breaks JSON mode's promise of a bare payload:
+    markdown fences around the object, prose before or after it (seen live
+    2026-07-12, crashed onboarding). Try the clean parse, then fall back to
+    the first parseable JSON value anywhere in the text."""
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    decoder = json.JSONDecoder()
+    for i, char in enumerate(text):
+        if char in "{[":
+            try:
+                value, _ = decoder.raw_decode(text, i)
+                return value
+            except json.JSONDecodeError:
+                continue
+    # a reply with no JSON at all is a one-off model wobble: worth a retry,
+    # never worth killing a half-finished Order
+    raise TransientProviderError(f"model returned no parseable JSON: {text[:120]!r}")
+
+
 def _json_call(client, contents):
     response = client.models.generate_content(
         model=TEXT_MODEL,
         contents=contents,
         config={"response_mime_type": "application/json"},
     )
-    return json.loads(response.text), response
+    return _parse_model_json(response.text), response
 
 
 def _image_part(path_or_image):
